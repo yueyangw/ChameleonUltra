@@ -13,6 +13,7 @@ SRC_FILES += \
   $(PROJ_DIR)/ble_main.c \
   $(PROJ_DIR)/rfid_main.c \
   $(PROJ_DIR)/settings.c \
+  $(PROJ_DIR)/custom/polling.c \
   $(PROJ_DIR)/usb_main.c \
   $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \
@@ -189,6 +190,7 @@ INC_FOLDERS += \
   ${SRC_COMMON} \
   ${PROJ_DIR}/bsp/ \
   ${PROJ_DIR}/utils/ \
+  ${PROJ_DIR}/custom/ \
   ${PROJ_DIR}/rfid/ \
   ${PROJ_DIR}/rfid/crypto/ \
   ${PROJ_DIR}/rfid/nfctag/ \

@@ -1,4 +1,4 @@
-#include "nrfx_power.h"
+﻿#include "nrfx_power.h"
 #include "app_timer.h"
 #include "syssleep.h"
 
@@ -13,6 +13,7 @@ static volatile bool m_system_off_enter = false;
 extern bool g_is_ble_connected; //Link to log in BLE
 extern bool g_is_tag_emulating; //The status of the logo emulation card
 extern volatile bool m_is_field_on; //NFC field generator state from app_main.c
+extern volatile bool g_polling_keep_awake; //Custom slot polling keeps the device awake
 
 
 /** @brief Equipment sleep timer event
@@ -45,6 +46,10 @@ void sleep_timer_stop() {
 /**@brief Sleep soft timer startup
  */
 void sleep_timer_start(uint32_t time_ms) {
+    // A running slot poller must keep the device in the awake state.
+    if (g_polling_keep_awake) {
+        return;
+    }
     // Close the previous sleep timer first
     sleep_timer_stop();
     // Non -USB power supply status
@@ -74,3 +79,4 @@ void sleep_system_run(void (*sysOffSleep)(), void (*sysOnSleep)()) {
         sysOnSleep();
     }
 }
+

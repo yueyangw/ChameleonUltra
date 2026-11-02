@@ -41,6 +41,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "usb_main.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
+#include "custom/polling.h"
 #include "settings.h"
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -79,6 +80,7 @@ volatile bool m_is_field_on = false;
 // cpu reset reason
 static uint32_t m_reset_source;
 static uint32_t m_gpregret_val;
+static bool m_woken_by_field = false;
 
 #define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
 #define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
@@ -322,7 +324,7 @@ static void system_off_enter(void) {
         // Power off animation
         uint8_t animation_config = settings_get_animation_config();
         uint8_t slot = tag_emulation_get_slot();
-        uint8_t dir = slot > 3 ? 1 : 0;
+        uint8_t dir = (slot % RGB_LIST_NUM) > 3 ? 1 : 0;
         uint8_t color = get_color_by_slot(slot);
         if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
             if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
@@ -472,7 +474,7 @@ static void check_wakeup_src(void) {
      */
 
     uint8_t slot = tag_emulation_get_slot();
-    uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t dir = (slot % RGB_LIST_NUM) > 3 ? 1 : 0;
     uint8_t color = get_color_by_slot(slot);
 
     if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
@@ -484,9 +486,9 @@ static void check_wakeup_src(void) {
         if (animation_config == SettingsAnimationModeFull) {
             rgb_marquee_sweep_to(color, !dir, 11);
             rgb_marquee_sweep_to(color, dir, 11);
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, dir ? (slot % RGB_LIST_NUM) : 7 - (slot % RGB_LIST_NUM));
         } else if (animation_config == SettingsAnimationModeMinimal) {
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, dir ? (slot % RGB_LIST_NUM) : 7 - (slot % RGB_LIST_NUM));
         } else if (animation_config == SettingsAnimationModeSymmetric) {
             rgb_marquee_symmetric_out(color, slot);
         } else {
@@ -501,6 +503,7 @@ static void check_wakeup_src(void) {
     } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
                (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
+        m_woken_by_field = true;
 
         // wake up from hf field.
         if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
@@ -521,7 +524,7 @@ static void check_wakeup_src(void) {
         uint8_t animation_config = settings_get_animation_config();
         if (animation_config == SettingsAnimationModeFull) {
             // In the case of field wake-up, only one round of RGB is swept as the power-on animation
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, dir ? (slot % RGB_LIST_NUM) : 7 - (slot % RGB_LIST_NUM));
         } else if (animation_config == SettingsAnimationModeSymmetric) {
             rgb_marquee_symmetric_out(color, slot);
         } else {
@@ -597,6 +600,7 @@ static void cycle_slot(bool dec) {
     }
     // Update status only if the new card slot switch is valid
     tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
+    polling_note_manual_switch();
     // Turn off the LEDs in case we were showing the battery status
     rgb_marquee_stop();
     uint32_t *led_pins = hw_get_led_array();
@@ -610,7 +614,7 @@ static void cycle_slot(bool dec) {
 static void battery_status_display_restore_slot(void) {
     uint8_t slot = tag_emulation_get_slot();
     uint8_t color = get_color_by_slot(slot);
-    uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t dir = (slot % RGB_LIST_NUM) > 3 ? 1 : 0;
 
     rgb_marquee_stop();
     set_slot_light_color(color);
@@ -702,9 +706,9 @@ static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color) {
     if (animation_config == SettingsAnimationModeFull) {
         rgb_marquee_sweep_to(color, !dir, 11);
         rgb_marquee_sweep_to(color, dir, 11);
-        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+        rgb_marquee_sweep_to(color, !dir, dir ? (slot % RGB_LIST_NUM) : 7 - (slot % RGB_LIST_NUM));
     } else if (animation_config == SettingsAnimationModeMinimal) {
-        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+        rgb_marquee_sweep_to(color, !dir, dir ? (slot % RGB_LIST_NUM) : 7 - (slot % RGB_LIST_NUM));
     } else if (animation_config == SettingsAnimationModeSymmetric) {
         rgb_marquee_symmetric_out(color, slot);
     }
@@ -1081,7 +1085,7 @@ extern bool g_usb_port_opened;
 static void blink_usb_led_status(void) {
     uint8_t slot = tag_emulation_get_slot();
     uint8_t color = get_color_by_slot(slot);
-    uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t dir = (slot % RGB_LIST_NUM) > 3 ? 1 : 0;
     static bool is_working = false;
     if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
         if (is_working) {
@@ -1159,6 +1163,7 @@ int main(void) {
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
+    polling_init(m_woken_by_field); // Restore the persisted slot polling configuration
     tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener
@@ -1188,6 +1193,8 @@ int main(void) {
 
         // Data pack process
         data_frame_process();
+        // Slot poller (cheap no-op unless enabled)
+        polling_tick();
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process
@@ -1200,3 +1207,4 @@ int main(void) {
         sleep_system_run(system_off_enter, nrf_pwr_mgmt_run);
     }
 }
+

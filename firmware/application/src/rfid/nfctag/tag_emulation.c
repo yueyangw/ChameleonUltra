@@ -60,7 +60,8 @@ static uint16_t m_tag_data_hf_crc;
 static tag_data_buffer_t m_tag_data_hf = {sizeof(m_tag_data_buffer_hf), m_tag_data_buffer_hf, &m_tag_data_hf_crc};
 
 /**
- * Eight card slots, each card slot has its own unique configuration
+ * Sixteen card slots, each card slot has its own unique configuration.
+ * Slots 0..2 keep the historical factory defaults; the rest start disabled.
  */
 static tag_slot_config_t slotConfig ALIGN_U32 = {
     // Configure activated card slot, default activation of the 0th card slot (the first card)
@@ -77,6 +78,14 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 6
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 7
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 8
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 9
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 10
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 11
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 12
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 13
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 14
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 15
+        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 16
     },
 };
 // The card slot configuration unique CRC, once the slot configuration changes, can be checked by CRC
@@ -447,7 +456,7 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     NRF_LOG_INFO("Migrating slotConfig v0...");
     NRF_LOG_HEXDUMP_INFO(tmpbuf, sizeof(tmpbuf));
     // Populate new slotConfig struct
-    slotConfig.version = TAG_SLOT_CONFIG_CURRENT_VERSION;
+    slotConfig.version = 8;
     slotConfig.active_slot = tmpbuf[0];
     for (uint8_t i = 0; i < ARRAYLEN(slotConfig.slots); i++) {
         bool enabled = tmpbuf[4 + (i * 4)] & 1;
@@ -472,6 +481,16 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     }
 }
 
+static void tag_emulation_migrate_slot_config_v8_to_v9(void) {
+    // Slots 8..15 were appended in v9. The buffer they live in is already
+    // zeroed by load, so they are disabled/undefined by default.
+    NRF_LOG_INFO("Migrating slotConfig v8 -> v9 (16 slots).");
+    slotConfig.version = 9;
+    if (slotConfig.active_slot >= TAG_MAX_SLOT_NUM) {
+        slotConfig.active_slot = 0;
+    }
+}
+
 static void tag_emulation_migrate_slot_config(void) {
     switch (slotConfig.version) {
         case 0:
@@ -489,8 +508,10 @@ static void tag_emulation_migrate_slot_config(void) {
              * `tag_emulation_save_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
              * through to the next case.
              */
-
+        case 8:
+            tag_emulation_migrate_slot_config_v8_to_v9();
             tag_emulation_save_config();
+            break;
         case TAG_SLOT_CONFIG_CURRENT_VERSION:
             break;
         default:
@@ -503,10 +524,14 @@ static void tag_emulation_migrate_slot_config(void) {
  * Load the emulated card configuration data, note that loading is just a card slot configuration
  */
 static void tag_emulation_load_config(void) {
-    uint16_t length = sizeof(slotConfig);
-    // Read the card slot configuration data
-    bool ret = fds_read_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, &length, (uint8_t *)&slotConfig);
-    if (ret) {
+    // Read into a zero-filled buffer so that a v8 (68-byte) record leaves the
+    // appended slots 8..15 cleanly disabled instead of containing stale RAM.
+    uint8_t tmpbuf[sizeof(slotConfig)];
+    memset(tmpbuf, 0, sizeof(tmpbuf));
+    uint16_t length = sizeof(tmpbuf);
+    bool ret = fds_read_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, &length, tmpbuf);
+    if (ret && length > 0 && length <= sizeof(tmpbuf)) {
+        memcpy(&slotConfig, tmpbuf, sizeof(slotConfig));
         // After the reading is completed, we will save a BCC of the current configuration. When it is stored later, it can be used as a reference for the contrast between changes.
         calc_14a_crc_lut((uint8_t *)&slotConfig, sizeof(slotConfig), (uint8_t *)&m_slot_config_crc);
         NRF_LOG_INFO("Load tag slot config done.");

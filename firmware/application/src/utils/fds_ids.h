@@ -32,6 +32,12 @@
  */
 #define FDS_SLOT_TAG_NICK_NAME_FILE_ID_BASE 0x1200
 
+/*
+ * Custom polling configuration (ULC-CUSTOM).
+ */
+#define FDS_POLLING_CONFIG_FILE_ID          0x1002
+#define FDS_POLLING_CONFIG_RECORD_KEY       0x1
+
 // Note that previously assigned records may need to be cleaned from Flash.
 // Taking into account the possible overlaps, it boils down to
 // ID 0x1066 Keys 0x1066

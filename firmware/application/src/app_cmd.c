@@ -11,6 +11,7 @@
 #include "app_status.h"
 #include "battery_health.h"
 #include "tag_persistence.h"
+#include "custom/polling.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
@@ -1126,6 +1127,7 @@ static data_frame_tx_t *cmd_processor_set_active_slot(uint16_t cmd, uint16_t sta
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     change_slot_auto(data[0]);
+    polling_note_manual_switch();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -2034,6 +2036,55 @@ static data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t s
         payload[slot].enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_get_slot_info_v2(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    struct {
+        uint16_t hf_tag_type;
+        uint16_t lf_tag_type;
+    } PACKED payload[16];
+
+    tag_slot_specific_type_t tag_types;
+    for (uint8_t slot = 0; slot < 16; slot++) {
+        tag_emulation_get_specific_types_by_slot(slot, &tag_types);
+        payload[slot].hf_tag_type = U16HTONS(tag_types.tag_hf);
+        payload[slot].lf_tag_type = U16HTONS(tag_types.tag_lf);
+    }
+
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_get_enabled_slots_v2(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    struct {
+        uint8_t enabled_hf;
+        uint8_t enabled_lf;
+    } PACKED payload[16];
+    for (uint8_t slot = 0; slot < 16; slot++) {
+        payload[slot].enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
+        payload[slot].enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_get_polling_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(polling_config_t),
+                           (uint8_t *)polling_get_config());
+}
+
+static data_frame_tx_t *cmd_processor_set_polling_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != sizeof(polling_config_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (!polling_set_config((const polling_config_t *)data)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_get_polling_status(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    polling_status_t st;
+    polling_get_status(&st);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(st), (uint8_t *)&st);
 }
 
 static data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3245,6 +3296,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
     {    DATA_CMD_DELETE_SLOT_TAG_NICK,         NULL,                        cmd_processor_delete_slot_tag_nick,          NULL                   },
     {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
+    {    DATA_CMD_GET_SLOT_INFO_V2,              NULL,                        cmd_processor_get_slot_info_v2,              NULL                   },
+    {    DATA_CMD_GET_ENABLED_SLOTS_V2,          NULL,                        cmd_processor_get_enabled_slots_v2,          NULL                   },
+    {    DATA_CMD_GET_POLLING_CONFIG,            NULL,                        cmd_processor_get_polling_config,            NULL                   },
+    {    DATA_CMD_SET_POLLING_CONFIG,            NULL,                        cmd_processor_set_polling_config,            NULL                   },
+    {    DATA_CMD_GET_POLLING_STATUS,            NULL,                        cmd_processor_get_polling_status,            NULL                   },
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO_EX,          NULL,                        cmd_processor_get_battery_info_ex,           NULL                   },

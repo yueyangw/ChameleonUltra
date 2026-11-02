@@ -19,6 +19,7 @@
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
+#include "custom/polling.h"
 
 #define NRF_LOG_MODULE_NAME tag_em410x
 #include "nrf_log.h"
@@ -43,6 +44,7 @@ const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
+    polling_note_field_state(false);
     m_is_lf_emulating = false;
     TAG_FIELD_LED_OFF()  // Make sure the indicator light of the LF field status
     // Re-arm LPCOMP so the next field appearance triggers lpcomp_event_handler.
@@ -85,6 +87,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // set the emulation status logo bit
     m_is_lf_emulating = true;
     g_is_tag_emulating = true;
+    polling_note_field_state(true);
     // turn off USB light effect when emulating cards
     g_usb_led_marquee_enable = false;
 

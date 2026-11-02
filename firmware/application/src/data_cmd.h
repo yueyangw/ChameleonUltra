@@ -215,4 +215,13 @@
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
 
+// ******************************************************************
+//               CMD for ULC custom extensions (19xx)
+// ******************************************************************
+#define DATA_CMD_GET_SLOT_INFO_V2               (1900)
+#define DATA_CMD_GET_ENABLED_SLOTS_V2           (1901)
+#define DATA_CMD_GET_POLLING_CONFIG             (1902)
+#define DATA_CMD_SET_POLLING_CONFIG             (1903)
+#define DATA_CMD_GET_POLLING_STATUS             (1904)
+
 #endif

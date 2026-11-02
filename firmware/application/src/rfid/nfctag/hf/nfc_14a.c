@@ -16,6 +16,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "rfid_main.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
+#include "custom/polling.h"
 
 
 #if NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE
@@ -660,6 +661,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             g_is_tag_emulating = true;
             g_usb_led_marquee_enable = false;
+            polling_note_field_state(true);
 
             set_slot_light_color(RGB_GREEN);
             TAG_FIELD_LED_ON()
@@ -682,6 +684,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
             g_is_tag_emulating = false;
+            polling_note_field_state(false);
             // call sleep_timer_start *after* unsetting g_is_tag_emulating
             sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);
 
