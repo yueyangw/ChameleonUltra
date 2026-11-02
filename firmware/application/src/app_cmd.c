@@ -1881,7 +1881,7 @@ static data_frame_tx_t *cmd_processor_get_slot_tag_nick(uint16_t cmd, uint16_t s
 }
 
 static data_frame_tx_t *cmd_processor_get_all_slot_nicks(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t response_buffer[TAG_MAX_SLOT_NUM * 2 * 37]; // Max possible size: 8 slots * 2 sense types * (1 byte length + 36 bytes nick)
+    uint8_t response_buffer[TAG_MAX_SLOT_NUM * 2 * 37]; // Max possible size: TAG_MAX_SLOT_NUM (16) slots * 2 sense types * (1 byte length + 36 bytes nick)
     uint16_t response_length = 0;
 
     for (uint8_t slot = 0; slot < TAG_MAX_SLOT_NUM; slot++) {
@@ -2072,10 +2072,18 @@ static data_frame_tx_t *cmd_processor_get_polling_config(uint16_t cmd, uint16_t 
 }
 
 static data_frame_tx_t *cmd_processor_set_polling_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != sizeof(polling_config_t)) {
+    polling_config_t cfg __attribute__((aligned(4)));
+    if (length == sizeof(polling_config_t)) {
+        memcpy(&cfg, data, sizeof(cfg));
+    } else if (length == ULC_POLLING_CONFIG_V2_SIZE && data[0] == ULC_POLLING_CONFIG_V2_VERSION) {
+        // Legacy client: keep the current values of the fields it does not know
+        memcpy(&cfg, polling_get_config(), sizeof(cfg));
+        memcpy(&cfg, data, ULC_POLLING_CONFIG_V2_COMMON);
+        cfg.version = ULC_POLLING_CONFIG_VERSION;
+    } else {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    if (!polling_set_config((const polling_config_t *)data)) {
+    if (!polling_set_config(&cfg)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);

@@ -536,6 +536,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                     if (cl_finished) {
                         // NRF_LOG_INFO("[MFEMUL_SELECT] m_tag_state_14a = MFEMUL_WORK");
                         m_tag_state_14a = NFC_TAG_STATE_14A_ACTIVE;
+                        polling_note_hf_selected();
                         if (!m_sniff_passive) {
                             nfc_tag_14a_tx_bytes(auto_coll_res->sak, 1, true);
                         }
@@ -722,6 +723,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         case NRFX_NFCT_EVT_RX_FRAMEEND: {
             set_slot_light_color(RGB_GREEN);
             TAG_FIELD_LED_ON()
+
+            polling_note_hf_activity();
 
             // NRF_LOG_INFO("RX FRAMEEND.\n");
             // TODO Remember a bug, if you do not reply to the message after receiving the message, you need to manually enable you

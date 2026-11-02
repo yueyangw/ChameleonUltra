@@ -541,6 +541,11 @@ static void tag_emulation_load_config(void) {
     } else {
         NRF_LOG_INFO("Tag slot config does not exist.");
     }
+    // Never trust a persisted active slot that is out of range (any version).
+    if (slotConfig.active_slot >= TAG_MAX_SLOT_NUM) {
+        NRF_LOG_WARNING("Invalid active slot %d, fallback to slot 0.", slotConfig.active_slot);
+        slotConfig.active_slot = 0;
+    }
 }
 
 /**

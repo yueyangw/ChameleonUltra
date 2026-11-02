@@ -399,6 +399,9 @@ void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t sta
 //start Start the lamp position
 //stop Stop lamp position
 void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
+    // Slots beyond the physical LEDs (e.g. slot 8..15) wrap onto the LED row
+    start %= RGB_LIST_NUM;
+    stop %= RGB_LIST_NUM;
     int8_t setled = start;
     uint32_t *led_pins = hw_get_led_array();
     //Set the brightness
@@ -540,6 +543,10 @@ void rgb_marquee_usb_idle(void) {
 
 void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
     uint32_t *led_pins = hw_get_led_array();
+    // Wrap slots beyond the physical LEDs, but keep 0xFF as the "no slot" marker
+    if (slot != 0xFF) {
+        slot %= RGB_LIST_NUM;
+    }
 
     //Adjust the color
     set_slot_light_color(color);
@@ -600,6 +607,10 @@ void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
 
 void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot) {
     uint32_t *led_pins = hw_get_led_array();
+    // Wrap slots beyond the physical LEDs, but keep 0xFF as the "no slot" marker
+    if (slot != 0xFF) {
+        slot %= RGB_LIST_NUM;
+    }
 
     //Adjust the color
     set_slot_light_color(color);

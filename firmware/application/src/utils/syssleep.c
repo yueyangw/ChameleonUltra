@@ -1,4 +1,4 @@
-﻿#include "nrfx_power.h"
+#include "nrfx_power.h"
 #include "app_timer.h"
 #include "syssleep.h"
 
