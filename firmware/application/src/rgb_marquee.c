@@ -320,6 +320,28 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
     }
 }
 
+// Same end state as rgb_marquee_slot_switch(), without the fade animation: it blocks for about
+// 2 ms instead of 140 ms, which slot polling needs to keep up with the reader.
+void rgb_marquee_slot_switch_instant(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t color_led_up) {
+    uint32_t *led_pins = hw_get_led_array();
+    nrfx_pwm_uninit(&pwm0_ins);
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
+    if (led_up <= 7) {
+        pwm_config.output_pins[0] = led_pins[led_up];
+        pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_sequ_val.channel_0 = get_pwmduty(99);
+        set_slot_light_color(color_led_up);
+        nrf_drv_pwm_init(&pwm0_ins, &pwm_config, rgb_marquee_slot_switch_pwm_callback);
+        nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
+        while (callback_waiting == 0);
+        callback_waiting = 0;
+    }
+}
+
 // 4 Light Tail horizontal movement cycle (not returning), does not include the disappearance of the tail, but includes the head of the head (for the type of playback type animation)
 //dir 0-from 1 card slot to 8 card slot, 1-from 8 card slot to 1 card slot (Direction, the end point is determined by the END parameter)
 //end To scan the number of lamps, decide the final animation area with the direction

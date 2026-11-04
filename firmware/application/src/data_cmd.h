@@ -223,5 +223,7 @@
 #define DATA_CMD_GET_POLLING_CONFIG             (1902)
 #define DATA_CMD_SET_POLLING_CONFIG             (1903)
 #define DATA_CMD_GET_POLLING_STATUS             (1904)
+#define DATA_CMD_POLLING_LAB_SET                (1905)
+#define DATA_CMD_POLLING_LAB_LOG                (1906)
 
 #endif

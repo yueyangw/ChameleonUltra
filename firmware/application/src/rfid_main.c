@@ -98,6 +98,15 @@ void apply_slot_change(uint8_t slot_now, uint8_t slot_new) {
 }
 
 /**
+ * @brief Like apply_slot_change() but without the 140 ms fade, for slot polling
+ */
+void apply_slot_change_fast(uint8_t slot_now, uint8_t slot_new) {
+    uint8_t color_now = get_color_by_slot(slot_now);
+    uint8_t color_new = get_color_by_slot(slot_new);
+    rgb_marquee_slot_switch_instant(slot_now % RGB_LIST_NUM, color_now, slot_new % RGB_LIST_NUM, color_new);
+}
+
+/**
  * @brief Function for get current device mode
  */
 device_mode_t get_device_mode(void) {

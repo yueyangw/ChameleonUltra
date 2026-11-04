@@ -6,6 +6,7 @@
 #include "mf1_crapto1.h"  // for prng_successor — real MFC LFSR PRNG
 #include "fds_util.h"
 #include "tag_persistence.h"
+#include "custom/polling.h"
 
 #ifdef NFC_MF1_FAST_SIM
 #include "mf1_crypto1.h"
@@ -768,12 +769,14 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     // The verification is successful, and you need to enter the state that has been successfully verified
                     m_mf1_state = MF1_STATE_AUTHENTICATED;
                     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_PROPRIETARY);
+                    polling_note_mf1_auth(true);
                     // Package, stitch the Qiqi school inspection, return
                     m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 32, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                     nfc_tag_14a_tx_bits(m_tag_tx_buffer.tx_warp_frame, m_tag_tx_buffer.tx_frame_bit_size);
                 } else {
                     // Temporary only stored verification failed logs
                     append_mf1_auth_log_step3(false);
+                    polling_note_mf1_auth(false);
                     // Verification failure, reset the status machine
                     nfc_tag_mf1_reset_handler();
                 }
@@ -1042,6 +1045,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 // If everything is normal, then we should make the card directly to sleep, and cannot respond to any message to the read head
                                 nfc_tag_mf1_reset_handler();
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
+                                polling_note_hf_halt();
                             } else {
                                 mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                                 nfc_tag_mf1_reset_handler();

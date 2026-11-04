@@ -1,3 +1,4 @@
+#include "app_timer.h"
 #include "tag_emulation.h"
 
 #include "crc_utils.h"
@@ -619,19 +620,44 @@ void tag_emulation_set_slot(uint8_t index) {
 /**
  * Switch to the card slot of the specified index, this function will automatically complete the data loading
  */
+/**
+ * Swap the emulated slot while a reader field is present. Unlike tag_emulation_change_slot() the
+ * NFC/LF sensing is not torn down: the NFCT only reports a field on a rising edge, so a restart
+ * would leave the card silent until the reader toggles its field. The NFCT interrupt is held off
+ * while the shared tag buffers are rewritten (well under 1 ms), a frame that arrives meanwhile is
+ * handled right after.
+ */
+void tag_emulation_change_slot_live(uint8_t index) {
+    tag_emulation_save_data();          // flash write only if the data changed, before IRQs are held off
+    NVIC_DisableIRQ(NFCT_IRQn);
+    tag_emulation_set_slot(index);
+    tag_emulation_load_data();
+    nfc_tag_14a_slot_changed();
+    tag_emulation_sense_run();          // idempotent: only (de)activates a sensor the new slot needs differently
+    NVIC_EnableIRQ(NFCT_IRQn);
+}
+
+volatile uint32_t g_slot_prof[6]; // app_timer ticks after each step of the last slot change (lab profiling)
+
 void tag_emulation_change_slot(uint8_t index, bool sense_disable) {
+    g_slot_prof[0] = app_timer_cnt_get();
     if (sense_disable) {
         // Turn off the analog card to avoid triggering the emulation when switching the card slot
         tag_emulation_sense_end();
     }
+    g_slot_prof[1] = app_timer_cnt_get();
     tag_emulation_save_data();      // Save the data of the current card, in case of there is a change
+    g_slot_prof[2] = app_timer_cnt_get();
     g_is_tag_emulating = false;     // Reset the emulating flag
     tag_emulation_set_slot(index);  // Update the index of the activated card slot
+    g_slot_prof[3] = app_timer_cnt_get();
     tag_emulation_load_data();      // Then reload the data of the card slot
+    g_slot_prof[4] = app_timer_cnt_get();
     if (sense_disable) {
         // According to the configuration of the new card slot, the monitoring status of our update
         tag_emulation_sense_run();
     }
+    g_slot_prof[5] = app_timer_cnt_get();
 }
 
 /**

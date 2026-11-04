@@ -379,11 +379,18 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 #endif
 
+    if (szDataBits > 8) {
+        polling_note_hf_interaction();
+    }
+
     // Start processing the received data, if it is a special frame, you can hand over the data to this link
     if (szDataBits <= 8) {
         // We may receive a Wupa or REQA instruction, or other special instructions
         bool isREQA = (p_data[0] == NFC_TAG_14A_CMD_REQA);
         bool isWUPA = (p_data[0] == NFC_TAG_14A_CMD_WUPA);
+        if (szDataBits == 7 && (isREQA || isWUPA)) {
+            polling_note_hf_poll();
+        }
         // The trigger conditions are: REQA response in non -Halt mode
         // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
@@ -566,6 +573,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 if (p_data[0] == NFC_TAG_14A_CMD_HALT && p_data[1] == 0x00 && p_data[2] == 0x57 && p_data[3] == 0xCD) {
                     // Set the status machine to the suspension state, and then wait for the next round of communication
                     m_tag_state_14a = NFC_TAG_STATE_14A_HALTED;
+                    polling_note_hf_halt();
                     return;
                 }
                 // RATS instruction
@@ -692,7 +700,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
-            if (reset_if_field_lost) {
+            if (reset_if_field_lost || polling_wants_nfct_reset()) {
                 // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
                 // After more more more testing, I found that simply going into sleep mode and restarting can restore work.
                 // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
@@ -773,6 +781,17 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
  */
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state) {
     m_tag_state_14a = state;
+}
+
+/**
+ * The emulated slot was swapped while the field stays on: forget the state of the previous
+ * card (selection, MIFARE auth) so the reader starts the new one from REQA/WUPA.
+ */
+void nfc_tag_14a_slot_changed(void) {
+    m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+    if (m_tag_handler.cb_reset != NULL) {
+        m_tag_handler.cb_reset();
+    }
 }
 
 /**

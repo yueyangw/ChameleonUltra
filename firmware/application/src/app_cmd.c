@@ -2073,12 +2073,14 @@ static data_frame_tx_t *cmd_processor_get_polling_config(uint16_t cmd, uint16_t 
 
 static data_frame_tx_t *cmd_processor_set_polling_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     polling_config_t cfg __attribute__((aligned(4)));
-    if (length == sizeof(polling_config_t)) {
+    if (length == sizeof(polling_config_t) && data[0] == ULC_POLLING_CONFIG_VERSION) {
         memcpy(&cfg, data, sizeof(cfg));
-    } else if (length == ULC_POLLING_CONFIG_V2_SIZE && data[0] == ULC_POLLING_CONFIG_V2_VERSION) {
-        // Legacy client: keep the current values of the fields it does not know
+    } else if ((length == sizeof(polling_config_t) && data[0] >= ULC_POLLING_CONFIG_FIRST_SAME_SIZE &&
+                data[0] <= ULC_POLLING_CONFIG_LAST_LEGACY) ||
+               (length == ULC_POLLING_CONFIG_V2_SIZE && data[0] == ULC_POLLING_CONFIG_V2_VERSION)) {
+        // Older client: it only knows the leading fields, keep the current values of the others
         memcpy(&cfg, polling_get_config(), sizeof(cfg));
-        memcpy(&cfg, data, ULC_POLLING_CONFIG_V2_COMMON);
+        memcpy(&cfg, data, ULC_POLLING_CONFIG_LEGACY_COMMON);
         cfg.version = ULC_POLLING_CONFIG_VERSION;
     } else {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -2093,6 +2095,41 @@ static data_frame_tx_t *cmd_processor_get_polling_status(uint16_t cmd, uint16_t 
     polling_status_t st;
     polling_get_status(&st);
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(st), (uint8_t *)&st);
+}
+
+static data_frame_tx_t *cmd_processor_polling_lab_set(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == sizeof(polling_lab_t)) {
+        polling_lab_t lab;
+        memcpy(&lab, data, sizeof(lab));
+        polling_lab_set(&lab);
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t resp[8];
+    polling_lab_t cur;
+    polling_lab_get(&cur);
+    uint32_t total = polling_log_total();
+    resp[0] = cur.flags;
+    resp[1] = cur.engine;
+    resp[2] = 0;
+    resp[3] = 0;
+    memcpy(&resp[4], &total, sizeof(total));
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
+}
+
+// Request: u32 first index, u8 max entries (<= 64). Response: u32 total + entries.
+static data_frame_tx_t *cmd_processor_polling_lab_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 5) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint32_t from;
+    memcpy(&from, data, sizeof(from));
+    uint8_t max = data[4] > 64 ? 64 : data[4];
+    static uint8_t buf[4 + 64 * sizeof(polling_log_entry_t)];
+    uint32_t total = polling_log_total();
+    memcpy(buf, &total, sizeof(total));
+    uint16_t n = polling_log_read(from, max, (polling_log_entry_t *)&buf[4]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 4 + n * sizeof(polling_log_entry_t), buf);
 }
 
 static data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3309,6 +3346,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_POLLING_CONFIG,            NULL,                        cmd_processor_get_polling_config,            NULL                   },
     {    DATA_CMD_SET_POLLING_CONFIG,            NULL,                        cmd_processor_set_polling_config,            NULL                   },
     {    DATA_CMD_GET_POLLING_STATUS,            NULL,                        cmd_processor_get_polling_status,            NULL                   },
+    {    DATA_CMD_POLLING_LAB_SET,               NULL,                        cmd_processor_polling_lab_set,               NULL                   },
+    {    DATA_CMD_POLLING_LAB_LOG,               NULL,                        cmd_processor_polling_lab_log,               NULL                   },
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO_EX,          NULL,                        cmd_processor_get_battery_info_ex,           NULL                   },

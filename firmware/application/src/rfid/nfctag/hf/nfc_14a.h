@@ -130,6 +130,7 @@ uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameB
 void nfc_tag_14a_sense_switch(bool enable);
 void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler);
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
+void nfc_tag_14a_slot_changed(void);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
